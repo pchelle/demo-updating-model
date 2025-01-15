@@ -1,0 +1,104 @@
+---
+title: "Data Summary"
+author: "P. Chelle"
+format: html
+editor: visual
+---
+
+```{r, include=FALSE}
+library(tidyverse)
+model_data <- read.csv("www/model_data.csv")
+new_data <- read.csv("www/new_data.csv")
+```
+
+## Data Summary
+
+```{r, results='asis', echo=FALSE}
+summary_data <- bind_rows(
+  model_data |> mutate(Data = "Model"),
+  new_data |> mutate(Data = "Model + Collected")
+)
+summary_data <- summary_data |>
+  group_by(Data) |>
+  summarise(
+    N = n(),
+    NCountry = n_distinct(country),
+    MedianAge = median(age),
+    MinAge = min(age),
+    MaxAge = max(age),
+    MedianWeight = median(weight),
+    MinWeight = min(weight),
+    MaxWeight = max(weight)
+  )
+names(summary_data) <- c(
+  "Data", "N", "Unique Countries",
+  paste(c("Median", "Min", "Max"), "Age [yrs]"),
+  paste(c("Median", "Min", "Max"), "Weight [yrs]")
+)
+knitr::kable(summary_data)
+```
+
+## Weight Data and Model
+
+Points represent the initial data associated with the collected data colored by country.
+Lines represent the median, 2.5th and 97.5th percentiles of the model predictions.
+
+```{r, echo=FALSE}
+weight_model <- lm(
+  log(weight) ~ splines::bs(age, df = 10) + sex,
+  data = model_data
+)
+min_age <- ceiling(min(model_data$age))
+max_age <- floor(max(model_data$age))
+input_data <- bind_rows(
+  data.frame(age = min_age:max_age, sex = "Male"),
+  data.frame(age = min_age:max_age, sex = "Female")
+)
+
+weight_data <- bind_cols(
+  input_data,
+  weight = exp(predict(weight_model, newdata = input_data))
+) |> mutate(
+  weight_min = weight * exp(qnorm(0.975) * sd(weight_model$residuals)),
+  weight_max = weight * exp(qnorm(0.025) * sd(weight_model$residuals))
+)
+
+ggplot(data = weight_data, aes(x = age, y = weight)) +
+  theme_bw() +
+  geom_point(data = new_data, mapping = aes(color = country)) +
+  geom_line(mapping = aes(y = weight_min), color = "tomato", linewidth = 1) +
+  geom_line(mapping = aes(y = weight_max), color = "tomato", linewidth = 1) +
+  geom_line(color = "firebrick", linewidth = 1) +
+  facet_wrap(~sex) +
+  scale_colour_viridis_d() +
+  labs(x = "Age [yrs]", y = "Weight [kg]")
+```
+
+## Height Data and Model
+
+Points represent the initial data associated with the collected data colored by country.
+Lines represent the median, 2.5th and 97.5th percentiles of the model predictions.
+
+```{r, echo=FALSE}
+height_model <- lm(
+  log(height) ~ splines::bs(age, df = 10) + sex,
+  data = model_data
+)
+height_data <- bind_cols(
+  input_data,
+  height = exp(predict(height_model, newdata = input_data))
+) |> mutate(
+  height_min = height * exp(qnorm(0.975) * sd(height_model$residuals)),
+  height_max = height * exp(qnorm(0.025) * sd(height_model$residuals))
+)
+
+ggplot(data = height_data, aes(x = age, y = height)) +
+  theme_bw() +
+  geom_point(data = new_data, mapping = aes(color = country)) +
+  geom_line(mapping = aes(y = height_min), color = "tomato", linewidth = 1) +
+  geom_line(mapping = aes(y = height_max), color = "tomato", linewidth = 1) +
+  geom_line(color = "firebrick", linewidth = 1) +
+  facet_wrap(~sex) +
+  scale_colour_viridis_d() +
+  labs(x = "Age [yrs]", y = "Height [cm]")
+```
